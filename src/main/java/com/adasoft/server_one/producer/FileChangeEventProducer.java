@@ -2,15 +2,22 @@ package com.adasoft.server_one.producer;
 
 import com.adasoft.commons.model.EventType;
 import com.adasoft.server_one.model.entity.FileChangeEvent;
+import com.adasoft.server_one.serializer.FileChangeEventSerializer;
 import com.adasoft.server_one.service.FileChangeEventService;
 import jakarta.annotation.PostConstruct;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 public class FileChangeEventProducer {
@@ -24,15 +31,14 @@ public class FileChangeEventProducer {
     @Autowired
     private FileChangeEventService fileChangeEventService;
 
-    public void sendFileChangeEvent(FileChangeEvent fileChangeEvent) {
-        kafkaTemplate.send("file-change-topic", fileChangeEvent);
-    }
-
     @PostConstruct
     public void startMonitoringFolder() {
         try {
             // Create a WatchService for monitoring file changes
             WatchService watchService = FileSystems.getDefault().newWatchService();
+
+            // Create a new instance of the KafkaTemplate with custom serializer
+            kafkaTemplate = new KafkaTemplate<>(producerFactory());
 
             // Register the folder_a directory for file change events
             Path directory = Paths.get(folderPath);
@@ -90,6 +96,14 @@ public class FileChangeEventProducer {
         } catch (IOException e) {
             // Handle the IOException if needed
         }
+    }
+
+    private ProducerFactory<String, FileChangeEvent> producerFactory() {
+        Map<String, Object> configs = new HashMap<>();
+        // Configure the producer properties as needed
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+
+        return new DefaultKafkaProducerFactory<>(configs, new StringSerializer(), new FileChangeEventSerializer());
     }
 
     private EventType mapWatchEventToEventType(WatchEvent.Kind<?> eventKind) {
